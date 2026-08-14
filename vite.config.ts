@@ -1,6 +1,9 @@
 import { defineConfig } from 'vite'
 
 export default defineConfig({
+  // GitHub Pages (Project Pages) は https://<owner>.github.io/<repo>/ 配下に
+  // 配信されるため、アセットの参照をそのサブパスに合わせる。
+  base: '/c2pa-viewer/',
   test: {
     environment: 'jsdom',
     // scaffold時点ではテストファイルが無いため許容する。
