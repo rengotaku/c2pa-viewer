@@ -10,7 +10,7 @@ export default defineConfig({
       provider: 'v8',
       // 分岐を持つロジック(C2PA解析・判定)のみをカバレッジ対象にする。
       // UIマウント処理(main.ts)や表示専用コードは対象外。
-      include: ['src/c2pa.ts', 'src/parser.ts'],
+      include: ['src/c2pa.ts', 'src/parser.ts', 'src/copy.ts'],
       thresholds: {
         lines: 80,
         branches: 80,
