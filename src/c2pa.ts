@@ -31,15 +31,23 @@ export function isSupportedFormat(mimeType: string, filename?: string): boolean 
 
 let defaultReaderFactoryPromise: Promise<ReaderFactory> | null = null;
 
+/** @internal テスト等でのキャッシュクリア用 */
+export function _resetDefaultReaderFactory(): void {
+  defaultReaderFactoryPromise = null;
+}
+
 async function getDefaultReaderFactory(): Promise<ReaderFactory> {
   if (!defaultReaderFactoryPromise) {
     defaultReaderFactoryPromise = (async () => {
       // WASM のパス等の設定はデフォルで init
       const c2pa = await createC2pa({
-        wasmSrc: 'https://cdn.jsdelivr.net/npm/@contentauth/c2pa-web@0.13.4/dist/resources/c2pa.wasm',
+        wasmSrc: 'https://cdn.jsdelivr.net/npm/@contentauth/c2pa-web@0.13.4/dist/resources/c2pa_bg.wasm',
       });
       return c2pa.reader;
-    })();
+    })().catch((err) => {
+      defaultReaderFactoryPromise = null;
+      throw err;
+    });
   }
   return defaultReaderFactoryPromise;
 }

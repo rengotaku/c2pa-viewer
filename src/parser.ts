@@ -105,7 +105,7 @@ export function parseManifestStore(manifestStore: ManifestStore | null | undefin
 
   if (Array.isArray(manifestStore.validation_status)) {
     for (const v of manifestStore.validation_status) {
-      if (v && v.success === false) {
+      if (v && v.success !== true) {
         validationErrors.push(v.explanation || v.code || 'Validation error');
       }
     }

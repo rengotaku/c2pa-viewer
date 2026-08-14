@@ -1,8 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
-import { readC2Pa, isSupportedFormat } from './c2pa';
+import { readC2Pa, isSupportedFormat, _resetDefaultReaderFactory } from './c2pa';
 import { parseManifestStore } from './parser';
-import type { Reader, ReaderFactory } from '@contentauth/c2pa-web';
+import type { Reader, ReaderFactory, C2paSdk } from '@contentauth/c2pa-web';
 import type { ManifestStore } from '@contentauth/c2pa-types';
+import { createC2pa } from '@contentauth/c2pa-web';
 
 vi.mock('@contentauth/c2pa-web', async (importOriginal) => {
   const mod = await importOriginal<typeof import('@contentauth/c2pa-web')>();
@@ -368,6 +369,11 @@ describe('C2PA Core Logic & Parser', () => {
 
     expect(result.status).toBe('verified');
     expect(result.claimGenerator).toBe('Default Factory Generator');
+    expect(createC2pa).toHaveBeenCalledWith(
+      expect.objectContaining({
+        wasmSrc: 'https://cdn.jsdelivr.net/npm/@contentauth/c2pa-web@0.13.4/dist/resources/c2pa_bg.wasm',
+      })
+    );
   });
 
   // --- codex レビュー指摘対応の追加テストケース ---
@@ -449,5 +455,61 @@ describe('C2PA Core Logic & Parser', () => {
     const result = parseManifestStore(mockManifestStore);
     expect(result.status).toBe('verified');
     expect(result.aiGenerationStatus).toBe('not_ai');
+  });
+
+  // --- codex 再レビュー指摘対応の追加テストケース ---
+
+  it('追加テスト: parseManifestStore-legacy-validation-status-omitted-success / successフィールドが省略されたレガシー失敗項目(v.success === undefined)でverification-issueと判定される', () => {
+    const mockManifestStore: ManifestStore = {
+      active_manifest: 'urn:c2pa:123',
+      manifests: {
+        'urn:c2pa:123': {
+          claim_generator: 'Legacy App',
+        },
+      },
+      validation_status: [
+        {
+          code: 'claim.signature.mismatch',
+          explanation: 'Signature invalid',
+          // success field is omitted (undefined)
+        },
+      ],
+    };
+    const result = parseManifestStore(mockManifestStore);
+    expect(result.status).toBe('verification-issue');
+    expect(result.validationErrors).toContain('Signature invalid');
+  });
+
+  it('追加テスト: readC2Pa-default-reader-factory-rejection-reset / getDefaultReaderFactoryで初期化エラー発生時にプロミスキャッシュがリセットされ次回呼び出しで再試行可能になる', async () => {
+    _resetDefaultReaderFactory();
+    const createC2paMock = vi.mocked(createC2pa);
+    createC2paMock.mockRejectedValueOnce(new Error('WASM load failed 404'));
+
+    const blob = new Blob(['dummy'], { type: 'image/jpeg' });
+    const result1 = await readC2Pa(blob);
+    expect(result1.status).toBe('unsupported-or-error');
+    expect(result1.error?.message).toBe('WASM load failed 404');
+
+    // 次回呼び出しで再試行され、正常レスポンスを返す
+    createC2paMock.mockResolvedValueOnce({
+      reader: {
+        fromBlob: vi.fn().mockResolvedValue({
+          activeLabel: vi.fn().mockResolvedValue('urn:c2pa:123'),
+          manifestStore: vi.fn().mockResolvedValue({
+            active_manifest: 'urn:c2pa:123',
+            manifests: {
+              'urn:c2pa:123': {
+                claim_generator: 'Retried Reader App',
+              },
+            },
+          }),
+          free: vi.fn().mockResolvedValue(undefined),
+        }),
+      },
+    } as unknown as C2paSdk);
+
+    const result2 = await readC2Pa(blob);
+    expect(result2.status).toBe('verified');
+    expect(result2.claimGenerator).toBe('Retried Reader App');
   });
 });
