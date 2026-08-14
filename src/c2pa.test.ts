@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { readC2Pa, isSupportedFormat, _resetDefaultReaderFactory } from './c2pa';
+import { readC2Pa, isSupportedFormat, resolveMimeType, _resetDefaultReaderFactory } from './c2pa';
 import { parseManifestStore } from './parser';
 import type { Reader, ReaderFactory, C2paSdk } from '@contentauth/c2pa-web';
 import type { ManifestStore } from '@contentauth/c2pa-types';
@@ -511,5 +511,28 @@ describe('C2PA Core Logic & Parser', () => {
     const result2 = await readC2Pa(blob);
     expect(result2.status).toBe('verified');
     expect(result2.claimGenerator).toBe('Retried Reader App');
+  });
+
+  // --- codex 最終レビュー指摘対応の追加テストケース ---
+
+  it('追加テスト: resolveMimeType-extension-resolution / 空のMIMEタイプとファイル名から正当なMIMEタイプが解決される', () => {
+    expect(resolveMimeType('', 'test.jpg')).toBe('image/jpeg');
+    expect(resolveMimeType('', 'test.jpeg')).toBe('image/jpeg');
+    expect(resolveMimeType('', 'test.png')).toBe('image/png');
+    expect(resolveMimeType('', 'test.webp')).toBe('image/webp');
+    expect(resolveMimeType('image/jpg', 'test.jpg')).toBe('image/jpeg');
+  });
+
+  it('追加テスト: readC2Pa-empty-file-type-fallback / File.typeが空文字で拡張子が.png/.jpgの場合に解決されたMIMEタイプでfromBlobが呼び出される', async () => {
+    const mockFromBlob = vi.fn().mockResolvedValue(null);
+    const mockReaderFactory: ReaderFactory = {
+      fromBlob: mockFromBlob,
+      fromBlobFragment: vi.fn(),
+    };
+
+    const emptyTypeFile = new File(['dummy'], 'sample.png', { type: '' });
+    await readC2Pa(emptyTypeFile, { readerFactory: mockReaderFactory });
+
+    expect(mockFromBlob).toHaveBeenCalledWith('image/png', emptyTypeFile);
   });
 });

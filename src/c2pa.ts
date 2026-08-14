@@ -13,18 +13,36 @@ const SUPPORTED_MIME_TYPES = new Set([
   'image/webp',
 ]);
 
+const EXTENSION_TO_MIME_MAP: Record<string, string> = {
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+};
+
+/**
+ * MIME type またはファイル拡張子から正当な MIME type を解決します
+ */
+export function resolveMimeType(mimeType: string, filename?: string): string {
+  if (mimeType && SUPPORTED_MIME_TYPES.has(mimeType.toLowerCase())) {
+    return mimeType.toLowerCase() === 'image/jpg' ? 'image/jpeg' : mimeType;
+  }
+  if (filename) {
+    const ext = filename.split('.').pop()?.toLowerCase();
+    if (ext && EXTENSION_TO_MIME_MAP[ext]) {
+      return EXTENSION_TO_MIME_MAP[ext];
+    }
+  }
+  return mimeType;
+}
+
 /**
  * サポートされている画像フォーマットか確認します
  */
 export function isSupportedFormat(mimeType: string, filename?: string): boolean {
-  if (SUPPORTED_MIME_TYPES.has(mimeType.toLowerCase())) {
+  const resolved = resolveMimeType(mimeType, filename);
+  if (SUPPORTED_MIME_TYPES.has(resolved.toLowerCase())) {
     return true;
-  }
-  if (filename) {
-    const ext = filename.split('.').pop()?.toLowerCase();
-    if (ext && ['jpg', 'jpeg', 'png', 'webp'].includes(ext)) {
-      return true;
-    }
   }
   return false;
 }
@@ -60,9 +78,10 @@ export async function readC2Pa(
   blob: Blob,
   options?: ReadC2PaOptions
 ): Promise<C2PaParseResult> {
-  const mimeType = blob.type;
+  const filename = blob instanceof File ? blob.name : undefined;
+  const mimeType = resolveMimeType(blob.type, filename);
 
-  if (!isSupportedFormat(mimeType, blob instanceof File ? blob.name : undefined)) {
+  if (!isSupportedFormat(mimeType, filename)) {
     return {
       status: 'unsupported-or-error',
       aiGenerationStatus: 'unknown',
